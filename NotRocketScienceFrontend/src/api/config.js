@@ -1,4 +1,4 @@
-// Central API base URL — change this one value to point at production
-const API = "http://localhost:8080/api";
+﻿// Central API base URL â€” change this one value to point at production
+const API = import.meta.env.VITE_API_BASE_URL + "/api";
 
 export default API;
