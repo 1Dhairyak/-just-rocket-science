@@ -1,0 +1,107 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
+         https://maven.apache.org/xsd/maven-4.0.0.xsd">
+
+    <modelVersion>4.0.0</modelVersion>
+
+    <!-- ─────────────────────────────────────────
+         PARENT = root pom
+         Inherits: java 21, Spring Boot BOM,
+         Spring Cloud BOM, Lombok, MapStruct
+    ───────────────────────────────────────── -->
+    <parent>
+        <groupId>com.justrocketscience</groupId>
+        <artifactId>just-rocket-science</artifactId>
+        <version>0.0.1-SNAPSHOT</version>
+        <relativePath>../pom.xml</relativePath>
+    </parent>
+
+    <artifactId>jrs-common</artifactId>
+    <!-- packaging=jar (default) — this is a library,
+         NOT a Spring Boot app. No main class. -->
+    <packaging>jar</packaging>
+    <name>JRS Common</name>
+    <description>
+        Shared library: response envelope, error codes,
+        custom exceptions. Imported by all services.
+        Has NO Spring Boot application class.
+    </description>
+
+    <dependencies>
+
+        <!-- ── Spring Web (provided) ──────────────
+             We need HttpStatus, ResponseEntity etc.
+             for the response envelope.
+             provided = not bundled in common's jar;
+             each service brings its own web starter.
+        ─────────────────────────────────────────── -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+            <scope>provided</scope>
+        </dependency>
+
+        <!-- ── Bean Validation ────────────────────
+             @NotBlank, @Email, @Size on request DTOs.
+             Needed here because common contains the
+             base DTO validation annotations.
+        ─────────────────────────────────────────── -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-validation</artifactId>
+            <scope>provided</scope>
+        </dependency>
+
+        <!-- ── Jackson ────────────────────────────
+             JSON serialization for ApiResponse<T>.
+             @JsonInclude, @JsonFormat live on the
+             envelope classes defined here.
+        ─────────────────────────────────────────── -->
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.fasterxml.jackson.datatype</groupId>
+            <artifactId>jackson-datatype-jsr310</artifactId>
+            <!-- Serializes Java 8+ dates (Instant, LocalDate)
+                 to ISO-8601 strings instead of timestamps -->
+        </dependency>
+
+        <!-- ── Lombok (inherited from root) ───────
+             @Data, @Builder, @Slf4j on common classes.
+             Already declared in root <dependencies>
+             but re-stated here for explicitness.
+        ─────────────────────────────────────────── -->
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <optional>true</optional>
+        </dependency>
+
+        <!-- ── Test ───────────────────────────────
+             JUnit 5 + AssertJ for common utility tests.
+        ─────────────────────────────────────────── -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+    </dependencies>
+
+    <build>
+        <plugins>
+            <!-- Standard compiler — annotation processing
+                 for Lombok only (no Spring Boot plugin
+                 needed; this is a plain jar module) -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+            </plugin>
+        </plugins>
+    </build>
+
+</project>

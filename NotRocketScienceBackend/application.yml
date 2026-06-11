@@ -1,0 +1,203 @@
+# =============================================================================
+# jrs-api-gateway — application.yml
+# =============================================================================
+# IMPORTANT: Do NOT put secrets in this file.
+# Secrets are injected as environment variables at runtime (AWS Secrets Manager
+# → ECS Task Definition environment → Spring Boot relaxed binding).
+#
+# Environment variables used by this service:
+#   JRS_JWT_SECRET      — Base64-encoded HS256 shared secret (min 32 bytes)
+#                         Must be identical to the value in jrs-auth-service.
+#   REDIS_HOST          — Redis hostname (default: localhost)
+#   REDIS_PORT          — Redis port (default: 6379)
+#   AUTH_SERVICE_HOST   — jrs-auth-service hostname or service-discovery name
+# =============================================================================
+
+server:
+  port: 8080
+
+spring:
+  application:
+    name: jrs-api-gateway
+
+  # ---------------------------------------------------------------------------
+  # Redis — used by rate limiter and token blacklist checker
+  # ---------------------------------------------------------------------------
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      # No password set here — inject SPRING_DATA_REDIS_PASSWORD if needed.
+
+  # ---------------------------------------------------------------------------
+  # Spring Cloud Gateway
+  # ---------------------------------------------------------------------------
+  cloud:
+    gateway:
+      # Routes are defined programmatically in GatewayRoutesConfig.java.
+      # No routes are declared here — keeping YAML and Java in one place
+      # prevents silent conflicts.
+
+      # Global default filters applied to every route.
+      default-filters:
+        - DedupeResponseHeader=Access-Control-Allow-Credentials Access-Control-Allow-Origin
+
+      httpclient:
+        # Timeout for establishing a connection to a downstream service.
+        connect-timeout: 2000  # ms
+        # Timeout waiting for a response from a downstream service.
+        response-timeout: 5s
+
+  # ---------------------------------------------------------------------------
+  # Actuator — health, metrics, info
+  # ---------------------------------------------------------------------------
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info, metrics, gateway
+  endpoint:
+    health:
+      show-details: when-authorized
+
+# =============================================================================
+# jrs custom properties — all bound to @ConfigurationProperties classes
+# =============================================================================
+jrs:
+
+  # ---------------------------------------------------------------------------
+  # JWT — HS256 shared secret configuration
+  # ---------------------------------------------------------------------------
+  # PATCH NOTE: This section previously used `public-key` (RS256).
+  # It now uses `secret` (HS256) to match jrs-auth-service.
+  # The secret is injected via JRS_JWT_SECRET environment variable.
+  # ---------------------------------------------------------------------------
+  jwt:
+    # secret: DO NOT SET HERE. Set via environment variable JRS_JWT_SECRET.
+    # Spring Boot maps JRS_JWT_SECRET → jrs.jwt.secret automatically.
+    secret: ${JRS_JWT_SECRET}
+
+    # Must match the issuer claim set by jrs-auth-service JwtService exactly.
+    issuer: jrs-auth-service
+
+    # Must match the audience claim set by jrs-auth-service JwtService exactly.
+    audience: jrs-api-gateway
+
+    # Clock skew tolerance in seconds. Prevents spurious expiry failures caused
+    # by minor time differences between the auth-service and gateway hosts.
+    clock-skew-seconds: 30
+
+  # ---------------------------------------------------------------------------
+  # CORS
+  # ---------------------------------------------------------------------------
+  cors:
+    # Local development default. In production, replace with your frontend URL.
+    # Example: https://justrocketscience.com
+    allowed-origins:
+      - http://localhost:3000
+
+    allowed-methods:
+      - GET
+      - POST
+      - PUT
+      - PATCH
+      - DELETE
+      - OPTIONS
+
+    allowed-headers:
+      - Authorization
+      - Content-Type
+      - X-Correlation-ID
+
+    exposed-headers:
+      - X-Correlation-ID
+
+    allow-credentials: false
+
+    # Browser can cache preflight responses for 1 hour.
+    max-age: 3600
+
+  # ---------------------------------------------------------------------------
+  # Rate limiter — token bucket algorithm via Spring Cloud Gateway + Redis
+  # ---------------------------------------------------------------------------
+  rate-limit:
+    # Anonymous tier — applied to /auth/register, /auth/login, /auth/refresh.
+    # Keyed by client IP. Restrictive to prevent brute-force.
+    anonymous-replenish-rate: 1     # 1 request/second sustained
+    anonymous-burst-capacity: 5     # up to 5 requests in a burst
+
+    # Authenticated tier — applied to all protected endpoints.
+    # Keyed by user ID (from X-User-Id header). More generous.
+    authenticated-replenish-rate: 10   # 10 requests/second sustained
+    authenticated-burst-capacity: 20   # up to 20 requests in a burst
+
+  # ---------------------------------------------------------------------------
+  # Circuit breaker — Resilience4j
+  # ---------------------------------------------------------------------------
+  circuit-breaker:
+    # Open the circuit if 50% of the last 10 calls fail.
+    failure-rate-threshold: 50
+    sliding-window-size: 10
+    minimum-number-of-calls: 5
+
+    # Stay open for 10 seconds, then try 3 probe requests (HALF-OPEN).
+    wait-duration-in-open-state-seconds: 10
+    permitted-calls-in-half-open-state: 3
+
+    # Count a downstream call as a failure if it takes longer than 3 seconds.
+    timeout-duration-seconds: 3
+
+  # ---------------------------------------------------------------------------
+  # OpenAPI / Swagger UI aggregation
+  # ---------------------------------------------------------------------------
+  openapi:
+    title: "Just Rocket Science API"
+    description: "Cloud-native Space Vehicle Analytics Platform — API Gateway"
+    version: "1.0.0"
+    services:
+      # Key: label shown in Swagger UI group selector
+      # Value: URL path the gateway routes to the downstream spec
+      "Auth Service": "/openapi/auth-service/v3/api-docs"
+      # Add more services here as you build them:
+      # "Rocket Service": "/openapi/rocket-service/v3/api-docs"
+      # "Launch Service": "/openapi/launch-service/v3/api-docs"
+
+# =============================================================================
+# Resilience4j — circuit breaker instances
+# These names must match the circuitBreaker() call in GatewayRoutesConfig.java
+# =============================================================================
+resilience4j:
+  circuitbreaker:
+    instances:
+      auth-service:
+        failure-rate-threshold: ${jrs.circuit-breaker.failure-rate-threshold}
+        sliding-window-size: ${jrs.circuit-breaker.sliding-window-size}
+        minimum-number-of-calls: ${jrs.circuit-breaker.minimum-number-of-calls}
+        wait-duration-in-open-state: ${jrs.circuit-breaker.wait-duration-in-open-state-seconds}s
+        permitted-number-of-calls-in-half-open-state: ${jrs.circuit-breaker.permitted-calls-in-half-open-state}
+        register-health-indicator: true
+  timelimiter:
+    instances:
+      auth-service:
+        timeout-duration: ${jrs.circuit-breaker.timeout-duration-seconds}s
+
+# =============================================================================
+# springdoc — OpenAPI / Swagger UI
+# =============================================================================
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+    # Populated dynamically by the OpenAPI aggregation config class (Step 7).
+    urls-primary-name: "Auth Service"
+  api-docs:
+    path: /v3/api-docs
+
+# =============================================================================
+# Logging
+# =============================================================================
+logging:
+  level:
+    com.justrocketscience.gateway: INFO
+    org.springframework.cloud.gateway: INFO
+    # Set to DEBUG during local development for detailed route matching logs:
+    # org.springframework.cloud.gateway.handler: DEBUG

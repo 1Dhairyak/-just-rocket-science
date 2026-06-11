@@ -1,0 +1,142 @@
+version: "3.9"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# jrs-platform — local development + CI stack
+#
+# Services:
+#   redis          — token blacklist + rate limit store
+#   jrs-auth-service  — issues HS256 JWT tokens
+#   jrs-api-gateway   — validates tokens, routes requests
+#
+# Usage:
+#   docker compose up --build
+#   docker compose up --build jrs-api-gateway   # rebuild gateway only
+#   docker compose down -v                       # teardown + volumes
+# ─────────────────────────────────────────────────────────────────────────────
+
+networks:
+  jrs-internal:
+    driver: bridge
+    name: jrs-internal
+
+volumes:
+  redis-data:
+
+services:
+
+  # ── Redis ──────────────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: jrs-redis
+    restart: unless-stopped
+    command: >
+      redis-server
+      --requirepass ${REDIS_PASSWORD}
+      --maxmemory 128mb
+      --maxmemory-policy allkeys-lru
+      --save ""
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - jrs-internal
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+
+  # ── Auth Service ───────────────────────────────────────────────────────────
+  jrs-auth-service:
+    build:
+      context: ../jrs-auth-service
+      dockerfile: Dockerfile
+    container_name: jrs-auth-service
+    restart: unless-stopped
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      SERVER_PORT: 8081
+      # JWT — must match gateway
+      JRS_JWT_SECRET: ${JRS_JWT_SECRET}
+      JRS_JWT_ISSUER: jrs-auth-service
+      JRS_JWT_AUDIENCE: jrs-api-gateway
+      JRS_JWT_ACCESS_TOKEN_EXPIRY: 900          # 15 min
+      JRS_JWT_REFRESH_TOKEN_EXPIRY: 604800      # 7 days
+      # Redis
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: 6379
+      SPRING_DATA_REDIS_PASSWORD: ${REDIS_PASSWORD}
+      # DB (auth-service owns user table)
+      SPRING_DATASOURCE_URL: ${AUTH_DB_URL}
+      SPRING_DATASOURCE_USERNAME: ${AUTH_DB_USER}
+      SPRING_DATASOURCE_PASSWORD: ${AUTH_DB_PASSWORD}
+    ports:
+      - "8081:8081"
+    networks:
+      - jrs-internal
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8081/actuator/health | grep -q '\"status\":\"UP\"'"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # ── API Gateway ────────────────────────────────────────────────────────────
+  jrs-api-gateway:
+    build:
+      context: ../jrs-api-gateway
+      dockerfile: Dockerfile
+      args:
+        BUILD_VERSION: ${BUILD_VERSION:-local}
+        GIT_SHA: ${GIT_SHA:-unknown}
+    container_name: jrs-api-gateway
+    restart: unless-stopped
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      SERVER_PORT: 8080
+      # JWT — must match auth-service
+      JRS_JWT_SECRET: ${JRS_JWT_SECRET}
+      JRS_JWT_ISSUER: jrs-auth-service
+      JRS_JWT_AUDIENCE: jrs-api-gateway
+      JRS_JWT_CLOCK_SKEW_SECONDS: 30
+      # Redis
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: 6379
+      SPRING_DATA_REDIS_PASSWORD: ${REDIS_PASSWORD}
+      # Rate limit
+      JRS_RATE_LIMIT_ANONYMOUS_REPLENISH_RATE: ${RATE_LIMIT_ANON:-10}
+      JRS_RATE_LIMIT_ANONYMOUS_BURST_CAPACITY: ${RATE_LIMIT_ANON_BURST:-20}
+      JRS_RATE_LIMIT_AUTHENTICATED_REPLENISH_RATE: ${RATE_LIMIT_AUTH:-100}
+      JRS_RATE_LIMIT_AUTHENTICATED_BURST_CAPACITY: ${RATE_LIMIT_AUTH_BURST:-200}
+      # Circuit breaker
+      JRS_CIRCUIT_BREAKER_FAILURE_RATE_THRESHOLD: 50
+      JRS_CIRCUIT_BREAKER_SLIDING_WINDOW_SIZE: 10
+      JRS_CIRCUIT_BREAKER_WAIT_DURATION_IN_OPEN_STATE: 30s
+      # Upstream routes
+      JRS_ROUTES_AUTH_URI: http://jrs-auth-service:8081
+      JRS_ROUTES_ROCKET_URI: http://jrs-rocket-service:8082
+      JRS_ROUTES_LAUNCH_URI: http://jrs-launch-service:8083
+      # CORS
+      JRS_CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:5173}
+      # Logging
+      LOGGING_LEVEL_COM_JRS_GATEWAY: ${LOG_LEVEL:-INFO}
+    ports:
+      - "8080:8080"
+    networks:
+      - jrs-internal
+    depends_on:
+      redis:
+        condition: service_healthy
+      jrs-auth-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health | grep -q '\"status\":\"UP\"'"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s

@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  jrs-api-gateway — Test dependencies only.
+  Merge into your existing pom.xml.
+  Spring Boot parent version must match your main pom.
+-->
+<project>
+
+  <dependencies>
+
+    <!-- ── Spring Boot Test Slice ─────────────────────────────────────── -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-test</artifactId>
+      <scope>test</scope>
+      <!-- Includes: JUnit 5, AssertJ, Mockito, JSONPath, WebTestClient -->
+    </dependency>
+
+    <!-- WebFlux WebTestClient (already on classpath if gateway uses WebFlux) -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-webflux</artifactId>
+      <scope>test</scope>
+    </dependency>
+
+    <!-- ── Testcontainers ─────────────────────────────────────────────── -->
+    <dependency>
+      <groupId>org.testcontainers</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <scope>test</scope>
+    </dependency>
+
+    <!-- GenericContainer for Redis 7 Alpine image -->
+    <dependency>
+      <groupId>org.testcontainers</groupId>
+      <artifactId>testcontainers</artifactId>
+      <scope>test</scope>
+    </dependency>
+
+    <!-- ── JWT (must match main source version) ───────────────────────── -->
+    <!--
+      Already in compile scope — listed here as documentation.
+      jjwt-api / jjwt-impl / jjwt-jackson must be on classpath for
+      TestTokenFactory to compile.
+    -->
+
+    <!-- ── Reactor Test (for reactive chain unit tests if needed) ─────── -->
+    <dependency>
+      <groupId>io.projectreactor</groupId>
+      <artifactId>reactor-test</artifactId>
+      <scope>test</scope>
+    </dependency>
+
+  </dependencies>
+
+  <dependencyManagement>
+    <dependencies>
+      <!-- Testcontainers BOM — aligns all TC module versions -->
+      <dependency>
+        <groupId>org.testcontainers</groupId>
+        <artifactId>testcontainers-bom</artifactId>
+        <version>1.19.7</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+    </dependencies>
+  </dependencyManagement>
+
+  <build>
+    <plugins>
+      <plugin>
+        <!-- Surefire 3.x required for JUnit 5 -->
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <configuration>
+          <!-- Testcontainers needs DOCKER_HOST available in CI -->
+          <environmentVariables>
+            <TESTCONTAINERS_RYUK_DISABLED>false</TESTCONTAINERS_RYUK_DISABLED>
+          </environmentVariables>
+        </configuration>
+      </plugin>
+    </plugins>
+  </build>
+
+</project>

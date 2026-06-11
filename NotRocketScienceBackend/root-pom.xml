@@ -1,0 +1,253 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
+         https://maven.apache.org/xsd/maven-4.0.0.xsd">
+
+    <modelVersion>4.0.0</modelVersion>
+
+    <!-- ─────────────────────────────────────────
+         PARENT: Spring Boot BOM
+         Manages versions for all Spring libs.
+         Every child module inherits this.
+    ───────────────────────────────────────── -->
+    <parent>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-parent</artifactId>
+        <version>3.2.5</version>
+        <relativePath/>
+    </parent>
+
+    <!-- ─────────────────────────────────────────
+         ROOT MODULE IDENTITY
+         packaging=pom → this is not a deployable
+         artifact; it is a build orchestrator only.
+    ───────────────────────────────────────── -->
+    <groupId>com.justrocketscience</groupId>
+    <artifactId>just-rocket-science</artifactId>
+    <version>0.0.1-SNAPSHOT</version>
+    <packaging>pom</packaging>
+    <name>Just Rocket Science — Root</name>
+    <description>Cloud-native Space Vehicle Analytics Platform</description>
+
+    <!-- ─────────────────────────────────────────
+         CHILD MODULES
+         Maven builds these in declaration order.
+         jrs-common MUST be first — other modules
+         depend on it at compile time.
+    ───────────────────────────────────────── -->
+    <modules>
+        <module>jrs-common</module>
+        <module>jrs-auth-service</module>
+        <module>jrs-api-gateway</module>
+    </modules>
+
+    <!-- ─────────────────────────────────────────
+         GLOBAL PROPERTIES
+         java.version → compiler source/target
+         All version constants live here so they
+         are changed in exactly one place.
+    ───────────────────────────────────────── -->
+    <properties>
+        <java.version>21</java.version>
+        <maven.compiler.source>21</maven.compiler.source>
+        <maven.compiler.target>21</maven.compiler.target>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+
+        <!-- Library versions not managed by Spring Boot BOM -->
+        <spring-cloud.version>2023.0.1</spring-cloud.version>
+        <jjwt.version>0.12.5</jjwt.version>
+        <mapstruct.version>1.5.5.Final</mapstruct.version>
+        <testcontainers.version>1.19.7</testcontainers.version>
+        <lombok.version>1.18.32</lombok.version>
+    </properties>
+
+    <!-- ─────────────────────────────────────────
+         DEPENDENCY MANAGEMENT (BOM section)
+         Declares versions ONLY — no actual dep
+         is pulled in here. Child modules still
+         must declare <dependency> blocks; they
+         just don't need <version> tags.
+    ───────────────────────────────────────── -->
+    <dependencyManagement>
+        <dependencies>
+
+            <!-- ── Spring Cloud BOM ───────────────────
+                 Manages versions for:
+                 - spring-cloud-starter-gateway
+                 - spring-cloud-starter-circuitbreaker-*
+                 - spring-cloud-starter-loadbalancer
+                 Import scope = merge this BOM into ours.
+            ─────────────────────────────────────────── -->
+            <dependency>
+                <groupId>org.springframework.cloud</groupId>
+                <artifactId>spring-cloud-dependencies</artifactId>
+                <version>${spring-cloud.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+
+            <!-- ── Testcontainers BOM ─────────────────
+                 Manages versions for all testcontainers
+                 modules: postgresql, redis, rabbitmq etc.
+                 Avoids version mismatch between modules.
+            ─────────────────────────────────────────── -->
+            <dependency>
+                <groupId>org.testcontainers</groupId>
+                <artifactId>testcontainers-bom</artifactId>
+                <version>${testcontainers.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+
+            <!-- ── JJWT ───────────────────────────────
+                 Three jars always go together:
+                 api   = interfaces (compile-time)
+                 impl  = runtime implementation
+                 jackson = JSON serialization of claims
+                 Locking all three to same version here
+                 prevents subtle runtime class conflicts.
+            ─────────────────────────────────────────── -->
+            <dependency>
+                <groupId>io.jsonwebtoken</groupId>
+                <artifactId>jjwt-api</artifactId>
+                <version>${jjwt.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.jsonwebtoken</groupId>
+                <artifactId>jjwt-impl</artifactId>
+                <version>${jjwt.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.jsonwebtoken</groupId>
+                <artifactId>jjwt-jackson</artifactId>
+                <version>${jjwt.version}</version>
+            </dependency>
+
+            <!-- ── MapStruct ──────────────────────────
+                 Compile-time DTO ↔ Entity mapper.
+                 Generates implementation classes during
+                 annotation processing — zero reflection,
+                 faster than ModelMapper at runtime.
+            ─────────────────────────────────────────── -->
+            <dependency>
+                <groupId>org.mapstruct</groupId>
+                <artifactId>mapstruct</artifactId>
+                <version>${mapstruct.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.mapstruct</groupId>
+                <artifactId>mapstruct-processor</artifactId>
+                <version>${mapstruct.version}</version>
+            </dependency>
+
+            <!-- ── jrs-common (internal module) ──────
+                 Our own shared library. Version managed
+                 here so all services stay in sync.
+            ─────────────────────────────────────────── -->
+            <dependency>
+                <groupId>com.justrocketscience</groupId>
+                <artifactId>jrs-common</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+
+        </dependencies>
+    </dependencyManagement>
+
+    <!-- ─────────────────────────────────────────
+         DEPENDENCIES (inherited by ALL children)
+         Only universally-needed deps go here.
+         Lombok + MapStruct processor are needed
+         everywhere for annotation processing.
+    ───────────────────────────────────────── -->
+    <dependencies>
+
+        <!-- Lombok: @Data, @Builder, @Slf4j etc.
+             provided scope = compile only, not in jar -->
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <optional>true</optional>
+        </dependency>
+
+        <!-- MapStruct processor: generates mapper impls
+             during javac annotation processing phase -->
+        <dependency>
+            <groupId>org.mapstruct</groupId>
+            <artifactId>mapstruct-processor</artifactId>
+            <scope>provided</scope>
+        </dependency>
+
+    </dependencies>
+
+    <!-- ─────────────────────────────────────────
+         BUILD PLUGINS (inherited by all children)
+    ───────────────────────────────────────── -->
+    <build>
+        <pluginManagement>
+            <plugins>
+
+                <!-- Spring Boot Maven Plugin
+                     Creates executable fat-jar.
+                     Excludes Lombok from final artifact. -->
+                <plugin>
+                    <groupId>org.springframework.boot</groupId>
+                    <artifactId>spring-boot-maven-plugin</artifactId>
+                    <configuration>
+                        <excludes>
+                            <exclude>
+                                <groupId>org.projectlombok</groupId>
+                                <artifactId>lombok</artifactId>
+                            </exclude>
+                        </excludes>
+                    </configuration>
+                </plugin>
+
+                <!-- Maven Compiler Plugin
+                     Enables annotation processing for
+                     Lombok + MapStruct together.
+                     Order matters: lombok BEFORE mapstruct
+                     so @Builder/@Data are processed first,
+                     then MapStruct sees the generated code. -->
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-compiler-plugin</artifactId>
+                    <configuration>
+                        <source>21</source>
+                        <target>21</target>
+                        <annotationProcessorPaths>
+                            <path>
+                                <groupId>org.projectlombok</groupId>
+                                <artifactId>lombok</artifactId>
+                                <version>${lombok.version}</version>
+                            </path>
+                            <path>
+                                <groupId>org.mapstruct</groupId>
+                                <artifactId>mapstruct-processor</artifactId>
+                                <version>${mapstruct.version}</version>
+                            </path>
+                        </annotationProcessorPaths>
+                        <compilerArgs>
+                            <!-- Makes MapStruct use Lombok-generated builders -->
+                            <arg>-Amapstruct.defaultComponentModel=spring</arg>
+                        </compilerArgs>
+                    </configuration>
+                </plugin>
+
+                <!-- Surefire: JUnit 5 test runner config -->
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-surefire-plugin</artifactId>
+                    <configuration>
+                        <includes>
+                            <include>**/*Test.java</include>
+                            <include>**/*Tests.java</include>
+                        </includes>
+                    </configuration>
+                </plugin>
+
+            </plugins>
+        </pluginManagement>
+    </build>
+
+</project>

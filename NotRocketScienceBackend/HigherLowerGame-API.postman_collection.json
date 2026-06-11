@@ -1,0 +1,315 @@
+{
+  "info": {
+    "name": "Higher Lower Game API",
+    "description": "Complete Postman collection for the Higher or Lower Game backend. Import → set BASE_URL variable → run Collection Runner in order.",
+    "_postman_id": "hlg-v2-1-0",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "BASE_URL",    "value": "http://localhost:8080",  "type": "string" },
+    { "key": "SESSION_ID",  "value": "",                        "type": "string" },
+    { "key": "CHALLENGE_ID","value": "",                        "type": "string" }
+  ],
+  "item": [
+    {
+      "name": "Game",
+      "item": [
+        {
+          "name": "Start Game (anonymous)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 201', () => pm.response.to.have.status(201));",
+                  "pm.test('success=true', () => pm.expect(pm.response.json().success).to.be.true);",
+                  "const d = pm.response.json().data;",
+                  "pm.collectionVariables.set('SESSION_ID',  d.sessionId);",
+                  "pm.collectionVariables.set('CHALLENGE_ID', d.challengeItem.id);",
+                  "pm.test('challengeItem.searchVolume is null (hidden)', () => pm.expect(d.challengeItem.searchVolume).to.be.null);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{}" },
+            "url": { "raw": "{{BASE_URL}}/api/game/start", "host": ["{{BASE_URL}}"], "path": ["api","game","start"] }
+          }
+        },
+        {
+          "name": "Start Game (named player)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 201', () => pm.response.to.have.status(201));",
+                  "const d = pm.response.json().data;",
+                  "pm.collectionVariables.set('SESSION_ID',   d.sessionId);",
+                  "pm.collectionVariables.set('CHALLENGE_ID', d.challengeItem.id);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"playerName\": \"Kinshu\"\n}" },
+            "url": { "raw": "{{BASE_URL}}/api/game/start", "host": ["{{BASE_URL}}"], "path": ["api","game","start"] }
+          }
+        },
+        {
+          "name": "Guess — HIGHER",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const d = pm.response.json().data;",
+                  "pm.test('has correct field', () => pm.expect(d).to.have.property('correct'));",
+                  "pm.test('revealedChallengeItem has searchVolume', () => pm.expect(d.revealedChallengeItem.searchVolume).to.not.be.null);",
+                  "if (!d.gameOver && d.nextRound) {",
+                  "  pm.collectionVariables.set('CHALLENGE_ID', d.nextRound.challengeItem.id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sessionId\": \"{{SESSION_ID}}\",\n  \"challengeItemId\": \"{{CHALLENGE_ID}}\",\n  \"guess\": \"HIGHER\"\n}"
+            },
+            "url": { "raw": "{{BASE_URL}}/api/game/guess", "host": ["{{BASE_URL}}"], "path": ["api","game","guess"] }
+          }
+        },
+        {
+          "name": "Guess — LOWER",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sessionId\": \"{{SESSION_ID}}\",\n  \"challengeItemId\": \"{{CHALLENGE_ID}}\",\n  \"guess\": \"LOWER\"\n}"
+            },
+            "url": { "raw": "{{BASE_URL}}/api/game/guess", "host": ["{{BASE_URL}}"], "path": ["api","game","guess"] }
+          }
+        },
+        {
+          "name": "Guess — Validation Error (missing sessionId)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 400', () => pm.response.to.have.status(400));",
+                  "pm.test('success=false', () => pm.expect(pm.response.json().success).to.be.false);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"challengeItemId\": \"{{CHALLENGE_ID}}\",\n  \"guess\": \"HIGHER\"\n}"
+            },
+            "url": { "raw": "{{BASE_URL}}/api/game/guess", "host": ["{{BASE_URL}}"], "path": ["api","game","guess"] }
+          }
+        },
+        {
+          "name": "Guess — Invalid Session (404)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 404', () => pm.response.to.have.status(404));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sessionId\": \"00000000-0000-0000-0000-000000000000\",\n  \"challengeItemId\": \"{{CHALLENGE_ID}}\",\n  \"guess\": \"HIGHER\"\n}"
+            },
+            "url": { "raw": "{{BASE_URL}}/api/game/guess", "host": ["{{BASE_URL}}"], "path": ["api","game","guess"] }
+          }
+        },
+        {
+          "name": "Guess — Bad Enum Value (400)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 400', () => pm.response.to.have.status(400));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sessionId\": \"{{SESSION_ID}}\",\n  \"challengeItemId\": \"{{CHALLENGE_ID}}\",\n  \"guess\": \"SIDEWAYS\"\n}"
+            },
+            "url": { "raw": "{{BASE_URL}}/api/game/guess", "host": ["{{BASE_URL}}"], "path": ["api","game","guess"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Leaderboard",
+      "item": [
+        {
+          "name": "Get Leaderboard (default top 10)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('success=true', () => pm.expect(pm.response.json().success).to.be.true);",
+                  "pm.test('has entries array', () => pm.expect(pm.response.json().data.entries).to.be.an('array'));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{BASE_URL}}/api/leaderboard", "host": ["{{BASE_URL}}"], "path": ["api","leaderboard"] }
+          }
+        },
+        {
+          "name": "Get Leaderboard (top 50)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{BASE_URL}}/api/leaderboard?limit=50",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api","leaderboard"],
+              "query": [{ "key": "limit", "value": "50" }]
+            }
+          }
+        },
+        {
+          "name": "Get Leaderboard — limit=0 (400)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": ["pm.test('Status 400', () => pm.response.to.have.status(400));"],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{BASE_URL}}/api/leaderboard?limit=0",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api","leaderboard"],
+              "query": [{ "key": "limit", "value": "0" }]
+            }
+          }
+        },
+        {
+          "name": "Get Leaderboard — limit=101 (400)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{BASE_URL}}/api/leaderboard?limit=101",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api","leaderboard"],
+              "query": [{ "key": "limit", "value": "101" }]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Stats (Phase 2)",
+      "item": [
+        {
+          "name": "Category Stats",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{BASE_URL}}/api/stats/categories", "host": ["{{BASE_URL}}"], "path": ["api","stats","categories"] }
+          }
+        },
+        {
+          "name": "Item Count",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{BASE_URL}}/api/stats/items", "host": ["{{BASE_URL}}"], "path": ["api","stats","items"] }
+          }
+        },
+        {
+          "name": "Data Health Check",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const status = pm.response.json().data.status;",
+                  "pm.test('Has status field', () => pm.expect(['HEALTHY','DEGRADED','CRITICAL']).to.include(status));",
+                  "if (status === 'CRITICAL') pm.test('HTTP 503', () => pm.response.to.have.status(503));",
+                  "else pm.test('HTTP 200', () => pm.response.to.have.status(200));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{BASE_URL}}/api/stats/health", "host": ["{{BASE_URL}}"], "path": ["api","stats","health"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Actuator",
+      "item": [
+        {
+          "name": "Health",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{BASE_URL}}/actuator/health", "host": ["{{BASE_URL}}"], "path": ["actuator","health"] }
+          }
+        },
+        {
+          "name": "Info",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{BASE_URL}}/actuator/info", "host": ["{{BASE_URL}}"], "path": ["actuator","info"] }
+          }
+        },
+        {
+          "name": "Metrics",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{BASE_URL}}/actuator/metrics", "host": ["{{BASE_URL}}"], "path": ["actuator","metrics"] }
+          }
+        }
+      ]
+    }
+  ]
+}

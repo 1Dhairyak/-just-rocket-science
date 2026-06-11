@@ -1,0 +1,126 @@
+spring:
+  data:
+    redis:
+      host: ${SPRING_DATA_REDIS_HOST}
+      port: ${SPRING_DATA_REDIS_PORT:6379}
+      password: ${SPRING_DATA_REDIS_PASSWORD}
+      # Connection pool — shared across rate-limit + blacklist
+      lettuce:
+        pool:
+          max-active: 16
+          max-idle: 8
+          min-idle: 2
+          max-wait: 2000ms
+        shutdown-timeout: 200ms
+
+  cloud:
+    gateway:
+      # Uncomment to enable request/response tracing in logs
+      # httpclient:
+      #   wiretap: true
+      routes:
+        # ── Auth Service (public + authenticated) ──────────────────────────
+        - id: auth-public
+          uri: ${JRS_ROUTES_AUTH_URI}
+          predicates:
+            - Path=/api/v1/auth/login,/api/v1/auth/register,/api/v1/auth/refresh
+          filters:
+            - name: CircuitBreaker
+              args:
+                name: auth-service
+                fallbackUri: forward:/fallback/auth
+
+        - id: auth-protected
+          uri: ${JRS_ROUTES_AUTH_URI}
+          predicates:
+            - Path=/api/v1/auth/**
+          filters:
+            - name: CircuitBreaker
+              args:
+                name: auth-service
+                fallbackUri: forward:/fallback/auth
+
+        # ── Rocket Service ─────────────────────────────────────────────────
+        - id: rocket-service
+          uri: ${JRS_ROUTES_ROCKET_URI}
+          predicates:
+            - Path=/api/v1/rockets/**
+          filters:
+            - name: CircuitBreaker
+              args:
+                name: rocket-service
+                fallbackUri: forward:/fallback/default
+
+        # ── Launch Service ─────────────────────────────────────────────────
+        - id: launch-service
+          uri: ${JRS_ROUTES_LAUNCH_URI}
+          predicates:
+            - Path=/api/v1/launches/**
+          filters:
+            - name: CircuitBreaker
+              args:
+                name: launch-service
+                fallbackUri: forward:/fallback/default
+
+  # Actuator — health only exposed externally; full detail internal only
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,circuitbreakers
+  endpoint:
+    health:
+      show-details: when-authorized
+      probes:
+        enabled: true          # /actuator/health/liveness + /actuator/health/readiness
+  health:
+    circuitbreakers:
+      enabled: true
+    ratelimiters:
+      enabled: true
+
+# Gateway JRS config — all values injected from env vars
+jrs:
+  jwt:
+    secret: ${JRS_JWT_SECRET}
+    issuer: ${JRS_JWT_ISSUER:jrs-auth-service}
+    audience: ${JRS_JWT_AUDIENCE:jrs-api-gateway}
+    clock-skew-seconds: ${JRS_JWT_CLOCK_SKEW_SECONDS:30}
+
+  rate-limit:
+    anonymous:
+      replenish-rate: ${JRS_RATE_LIMIT_ANONYMOUS_REPLENISH_RATE:10}
+      burst-capacity: ${JRS_RATE_LIMIT_ANONYMOUS_BURST_CAPACITY:20}
+    authenticated:
+      replenish-rate: ${JRS_RATE_LIMIT_AUTHENTICATED_REPLENISH_RATE:100}
+      burst-capacity: ${JRS_RATE_LIMIT_AUTHENTICATED_BURST_CAPACITY:200}
+
+  circuit-breaker:
+    failure-rate-threshold: ${JRS_CIRCUIT_BREAKER_FAILURE_RATE_THRESHOLD:50}
+    sliding-window-size: ${JRS_CIRCUIT_BREAKER_SLIDING_WINDOW_SIZE:10}
+    wait-duration-in-open-state: ${JRS_CIRCUIT_BREAKER_WAIT_DURATION_IN_OPEN_STATE:30s}
+    permitted-calls-in-half-open: 3
+
+  cors:
+    allowed-origins: ${JRS_CORS_ALLOWED_ORIGINS:http://localhost:3000}
+    allowed-methods: GET,POST,PUT,DELETE,PATCH,OPTIONS
+    allowed-headers: "*"
+    allow-credentials: true
+    max-age: 3600
+
+# ── Logging ──────────────────────────────────────────────────────────────────
+logging:
+  level:
+    com.jrs.gateway: ${LOGGING_LEVEL_COM_JRS_GATEWAY:INFO}
+    org.springframework.cloud.gateway: WARN
+    io.lettuce.core: WARN
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level [%X{correlationId}] %logger{36} - %msg%n"
+
+# ── Server ────────────────────────────────────────────────────────────────────
+server:
+  port: ${SERVER_PORT:8080}
+  # Reactor Netty — gateway is non-blocking; no servlet config needed
+  netty:
+    connection-timeout: 5000
+    idle-timeout: 60000

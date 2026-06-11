@@ -1,0 +1,64 @@
+spring:
+  data:
+    redis:
+      # Injected dynamically by Testcontainers via @DynamicPropertySource
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+
+  cloud:
+    gateway:
+      routes:
+        # All upstream URIs point to a non-existent host in tests.
+        # This causes connection failures used by circuit breaker tests.
+        - id: rocket-service
+          uri: http://non-existent-upstream-host:9999
+          predicates:
+            - Path=/api/v1/rockets/**
+        - id: launch-service
+          uri: http://non-existent-upstream-host:9999
+          predicates:
+            - Path=/api/v1/launches/**
+
+jrs:
+  jwt:
+    # Must match TestTokenFactory.TEST_SECRET exactly
+    secret: dGVzdC1zZWNyZXQtZm9yLWpycy1nYXRld2F5LWludGVncmF0aW9uLXRlc3Rz
+    issuer: jrs-auth-service
+    audience: jrs-api-gateway
+    clock-skew-seconds: 0  # No skew in tests — expired means expired
+
+  rate-limit:
+    anonymous:
+      replenish-rate: 2         # 2 req/s — exhausted quickly in tests
+      burst-capacity: 3         # bucket drains after 3 rapid requests
+    authenticated:
+      replenish-rate: 5
+      burst-capacity: 6         # higher than anonymous — per-user isolation test
+
+  circuit-breaker:
+    failure-rate-threshold: 50      # % — 2 of 4 failures trips the breaker
+    sliding-window-size: 4          # small window for fast tripping
+    wait-duration-in-open-state: 5s # short open-state wait for half-open test
+    permitted-calls-in-half-open: 1
+
+  cors:
+    allowed-origins:
+      - http://localhost:3000
+      - http://localhost:5173
+    allowed-methods:
+      - GET
+      - POST
+      - PUT
+      - DELETE
+      - OPTIONS
+    allowed-headers:
+      - "*"
+    allow-credentials: true
+    max-age: 3600
+
+logging:
+  level:
+    com.jrs.gateway: DEBUG
+    org.springframework.cloud.gateway: DEBUG
+    io.lettuce.core: WARN       # suppress Redis client noise in test output
+    org.testcontainers: WARN
