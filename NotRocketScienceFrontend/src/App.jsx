@@ -4,6 +4,7 @@ import AgencyPage from "./pages/AgencyPage";
 import RocketPage from "./pages/RocketPage";
 import ComparePage from "./pages/ComparePage";
 import RocketSVG from "./components/icons/RocketSVG";
+import LoadingScreen from "./components/LoadingScreen";
 import { useState } from "react";
 import "./App.css";
 
@@ -52,7 +53,7 @@ export default function App() {
       </nav>
 
       {/* ── Loading / error states ── */}
-      {loading && <div className="spinner-wrap"><div className="spinner" /></div>}
+      {loading && <LoadingScreen />}
       {error && (
         <div style={{ padding: 40 }}>
           <div className="error-box">
